@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200" fill="none">
+	<!-- Simplified placeholder without decorative diagonal lines -->
+	<rect width="1200" height="1200" rx="12" fill="#EAEAEA" />
+	<g opacity="0.9" transform="translate(0,0)">
+		<rect x="200" y="200" width="800" height="600" rx="8" fill="#FFFFFF" />
+		<g transform="translate(360,360)">
+			<circle cx="80" cy="80" r="70" fill="#F3F4F6" stroke="#D1D5DB" stroke-width="2" />
+			<rect x="170" y="30" width="300" height="100" rx="8" fill="#F3F4F6" stroke="#D1D5DB" stroke-width="2" />
+		</g>
+	</g>
+</svg>
