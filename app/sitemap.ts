@@ -1,45 +1,41 @@
 import { getSupabaseService } from '@/lib/supabase/server'
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://sbpgoiania.com.br'
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL || 'https://sbpgoiania.com.br'
 
 function formatDate(d: string | Date | null) {
   if (!d) return new Date().toISOString()
   return new Date(d).toISOString()
 }
 
-export async function GET() {
-  // Static routes to always include
+export default async function sitemap() {
   const staticRoutes = ['/', '/admin']
 
-  // Try to fetch dynamic content slugs from Supabase
-  let dynamicRoutes: string[] = []
+  let dynamicRoutes: { url: string; lastModified: string }[] = []
+
   try {
     const supabase = getSupabaseService()
     if (supabase) {
-      const { data, error } = await supabase.from('contents').select('slug, updated_at').limit(1000)
+      const { data, error } = await supabase
+        .from('contents')
+        .select('slug, updated_at')
+        .limit(1000)
+
       if (!error && Array.isArray(data)) {
         dynamicRoutes = data
           .filter((r: any) => r.slug)
-          .map((r: any) => `/content/${encodeURIComponent(r.slug)}`)
+          .map((r: any) => ({
+            url: `${SITE_URL}/content/${encodeURIComponent(r.slug)}`,
+            lastModified: formatDate(r.updated_at),
+          }))
       }
     }
-  } catch (err) {
-    // ignore and fallback to static only
-  }
+  } catch (_) {}
 
-  const routes = [...staticRoutes, ...dynamicRoutes]
+  const staticMapped = staticRoutes.map((route) => ({
+    url: `${SITE_URL}${route}`,
+    lastModified: formatDate(null),
+  }))
 
-  const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n` +
-    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-    routes.map((route) => {
-      return `  <url>\n    <loc>${SITE_URL}${route}</loc>\n    <lastmod>${formatDate(null)}</lastmod>\n  </url>`
-    }).join('\n') +
-    `\n</urlset>`
-
-  return new Response(sitemap, {
-    headers: {
-      'Content-Type': 'application/xml',
-      'Cache-Control': 's-maxage=86400, stale-while-revalidate=3600',
-    },
-  })
+  return [...staticMapped, ...dynamicRoutes]
 }
