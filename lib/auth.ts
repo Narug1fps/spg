@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js'
 export async function validateAdminRequest(request?: Request) {
   try {
     let userId: string | null = null
+    let userEmail: string | null = null
 
     // 1) If an Authorization header with a Bearer token is present, prefer it.
     if (request) {
@@ -25,11 +26,16 @@ export async function validateAdminRequest(request?: Request) {
         if (url && anonKey && token) {
           try {
             const tmp = createClient(url, anonKey)
+            // Attempt to validate token via Supabase SDK.
             const { data, error } = await tmp.auth.getUser(token as string)
             if (!error && data?.user?.id) {
               userId = data.user.id
+              userEmail = data.user.email || null
+            } else if (error) {
+              console.warn('[validateAdminRequest] getUser error:', error?.message || error)
             }
           } catch (e) {
+            console.warn('[validateAdminRequest] getUser threw:', e)
             // continue to cookie-based fallback
           }
         }
@@ -56,8 +62,12 @@ export async function validateAdminRequest(request?: Request) {
     // 3) Verify admin membership using the privileged service client
     const service = getSupabaseService()
     if (!service) {
-      // In non-production or when service key missing, return a lightweight fallback
-      if (process.env.NODE_ENV !== 'production') return { id: userId, username: 'admin' }
+      // In development, allow auto-provisioning if service key is missing
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[validateAdminRequest] SUPABASE_SERVICE_ROLE_KEY missing; auto-provisioning in dev')
+        return { id: userId, username: userEmail?.split('@')[0] || 'admin', email: userEmail }
+      }
+      console.error('[validateAdminRequest] Service role key not configured')
       return null
     }
 
@@ -68,11 +78,23 @@ export async function validateAdminRequest(request?: Request) {
       .maybeSingle()
 
     if (adminError) {
-      console.error('Error querying admins table:', adminError)
+      console.error('[validateAdminRequest] Error querying admins table:', adminError)
+      // In development, allow access even if query fails (might be schema issue)
+      if (process.env.NODE_ENV !== 'production') {
+        return { id: userId, username: userEmail?.split('@')[0] || 'admin', email: userEmail }
+      }
       return null
     }
 
-    return adminRow || null
+    // If admin row exists, return it; otherwise auto-provision in dev
+    if (adminRow) return adminRow
+    
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('[validateAdminRequest] User not in admins table; auto-provisioning in dev')
+      return { id: userId, username: userEmail?.split('@')[0] || 'admin', email: userEmail }
+    }
+    
+    return null
   } catch (err) {
     console.error('validateAdminRequest error:', err)
     return null

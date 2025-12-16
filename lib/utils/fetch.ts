@@ -12,34 +12,36 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}) {
   const headers: Record<string, string> = { ...origHeaders }
   if (!isFormData) headers['Content-Type'] = headers['Content-Type'] || 'application/json'
 
-  // Prefer to attach the client session token when available
   try {
     const supabase = getSupabaseClient()
-    const { data: sessionData } = await supabase.auth.getSession()
-    const token = (sessionData as any)?.session?.access_token || (sessionData as any)?.access_token
+    
+    // Tenta pegar a sessão ativa do Supabase Client
+    const { data } = await supabase.auth.getSession()
+    const token = data?.session?.access_token
+
     if (token) {
       headers['Authorization'] = `Bearer ${token}`
-      return fetch(url, { ...options, headers, credentials: options.credentials ?? 'include' })
-    }
-  } catch (e) {
-    // no-op, attempt local fallback
-  }
-
-  // LocalStorage fallback (dev): allow an explicitly stored token to be used
-  try {
-    if (typeof window !== 'undefined') {
-      const localToken = window.localStorage.getItem('ADMIN_ACCESS_TOKEN')
-      if (localToken) {
-        headers['Authorization'] = `Bearer ${localToken}`
-        return fetch(url, { ...options, headers, credentials: options.credentials ?? 'include' })
+    } else {
+      // Fallback: Tenta pegar do LocalStorage se o cliente do Supabase ainda não carregou
+      if (typeof window !== 'undefined') {
+        const localToken = window.localStorage.getItem('ADMIN_ACCESS_TOKEN') || 
+                           window.localStorage.getItem('sb-access-token') // Chave padrão comum
+        if (localToken) {
+          headers['Authorization'] = `Bearer ${localToken}`
+        }
       }
     }
   } catch (e) {
-    // ignore storage errors
+    console.error("Erro ao obter token de sessão:", e)
   }
 
   // Default: include credentials to allow cookie-based sessions to be forwarded
-  return fetch(url, { ...options, headers, credentials: options.credentials ?? 'include' })
+  // Enviamos tanto o Header (Bearer) quanto os Cookies (include) para cobrir todas as bases
+  return fetch(url, { 
+    ...options, 
+    headers, 
+    credentials: options.credentials ?? 'include' 
+  })
 }
 
 export function generateSlug(text: string): string {
@@ -47,4 +49,4 @@ export function generateSlug(text: string): string {
     .toLowerCase()
     .replace(/\s+/g, "-")
     .replace(/[^\w-]/g, "")
-}
+} 
